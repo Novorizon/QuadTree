@@ -5,8 +5,8 @@ public static class BoundsExtension
     {
         if (a.min.x <= b.min.x && a.min.z <= b.min.z && a.max.x >= b.max.x && a.max.z >= b.max.z)
             return true;
-        if (a.min.x >= b.min.x && a.min.z >= b.min.z && a.max.x <= b.max.x && a.max.z <= b.max.z)
-            return true;
+        //if (a.min.x >= b.min.x && a.min.z >= b.min.z && a.max.x <= b.max.x && a.max.z <= b.max.z)
+        //    return true;
         return false;
     }
 

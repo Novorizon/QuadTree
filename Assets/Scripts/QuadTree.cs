@@ -20,140 +20,192 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class QuadTree<T>
+namespace Tree
 {
-    private int depth;
-    private QuadTreeNode<T> root;
-    public QuadTreeNode<T> Root => root;
 
-    public QuadTree(Bounds Bounds, int maxDeep = 31)
+    public class QuadTree<T>
     {
-        depth = maxDeep;
-        root = new QuadTreeNode<T>(Bounds);
-    }
+        int id = 0;
+        int depth;
+        QuadTreeNode<T> root;
+        public QuadTreeNode<T> Root => root;
 
+        Dictionary<T, QuadTreeNode<T>> nodes;
+        Dictionary<int, T> datas;//数据 id 和 数据
 
-    //Insert node of bounds to the first QuadTreeNode contains it totally
-    public void Insert(T data, Bounds Bounds)
-    {
-        Insert(root, data, Bounds, 1);
-    }
-
-    //return all objects of T intersected with bounds
-    public void Search(Bounds bounds, List<T> list, bool accuracy = false)
-    {
-        Search(root, bounds, list, accuracy);
-    }
-
-    public List<T> Traverse()
-    {
-        List<T> values = new List<T>();
-        Traverse(root, values);
-        return values;
-    }
-
-
-    internal void Insert(QuadTreeNode<T> root, T data, Bounds Bounds, int deep)
-    {
-        Bounds pBounds = root.bounds;
-        if (deep < depth)
+        public QuadTree(Bounds bounds, int maxDeep = 31)
         {
-            //Create child nodes
-            if (root.children == null)
-            {
-                root.children = new QuadTreeNode<T>[4];
-                Vector3 quadSize = pBounds.size / 4;
+            id = 0;
+            depth = maxDeep;
 
-                Vector3 center1 = pBounds.min + quadSize * 3;
+            nodes = new Dictionary<T, QuadTreeNode<T>>();
+            datas = new Dictionary<int, T>();
 
-                Vector3 center2 = pBounds.min + quadSize;
-                center2.z = center2.z + 2 * quadSize.z;
-
-                Vector3 center3 = pBounds.min + quadSize;
-
-                Vector3 center4 = pBounds.min + quadSize;
-                center4.x = center4.x + 2 * quadSize.x;
-
-                Vector3 size = pBounds.size / 2;
-
-                root.children[(int)Quadrant.First] = new QuadTreeNode<T>(new Bounds(center1, size));
-                root.children[(int)Quadrant.Second] = new QuadTreeNode<T>(new Bounds(center2, size));
-                root.children[(int)Quadrant.Third] = new QuadTreeNode<T>(new Bounds(center3, size));
-                root.children[(int)Quadrant.Fourth] = new QuadTreeNode<T>(new Bounds(center4, size));
-            }
-
-            for (int i = 0; i < 4; i++)
-            {
-                QuadTreeNode<T> child = root.children[i];
-                if (child.bounds.Contains(Bounds))
-                {
-                    //set bounds to the child node if overlapped  by child bounds
-                    Insert(child, data, Bounds, deep + 1);
-                    return;
-                }
-            }
+            root = new QuadTreeNode<T>(id++, 0, 0, bounds);
+            CreateNodes(root, bounds);
         }
-        //set bounds to the current root node if can not contained  by any child bounds
-        root.datas.Add(data);
-        root.boundsList.Add(Bounds);
-    }
 
-    internal void Search(QuadTreeNode<T> node, Bounds bounds, List<T> list, bool accuracy = false)
-    {
-        int dataCount = node.datas.Count;
-        if (dataCount > 0)
+
+        //Insert node of bounds to the first QuadTreeNode contains it totally
+        public void Insert(T data, Bounds bounds)
         {
-            if (accuracy)
+            Insert(root, data, bounds);
+        }
+
+        //return all objects of T intersected with bounds
+        public List<T> Search(Bounds bounds, bool accuracy = false)
+        {
+            List<T> list = new List<T>();
+            Search(root, bounds, list, accuracy);
+            return list;
+        }
+
+        public void Update(T data, Bounds bounds)
+        {
+            Remove(data);
+            Insert(root, data, bounds);
+        }
+
+
+        public List<T> Traverse()
+        {
+            List<T> values = new List<T>();
+            Traverse(root, values);
+            return values;
+        }
+
+
+        internal void Insert(QuadTreeNode<T> root, T data, Bounds Bounds)
+        {
+            if (root.depth + 1 < depth)
             {
-                for (int i = 0; i < dataCount; i++)
+                if (!root.hasNode)
                 {
-                    if (node.boundsList[i].Intersect(bounds))
+                    CreateNodes(root, root.bounds);
+                }
+
+                for (int i = 0; i < 4; i++)
+                {
+                    QuadTreeNode<T> child = root.nodes[i];
+                    if (child.bounds.Contains(Bounds))
                     {
-                        list.Add(node.datas[i]);
+                        Insert(child, data, Bounds);
+                        return;
                     }
                 }
             }
-            else
+            //set bounds to the current root node if can not contained  by any child bounds
+            //如果任何子节点都不能完全包含该Bounds，则加到上一层节点上
+            QuadNodeInfo<T> nodeInfo = new QuadNodeInfo<T>(root.id, data, Bounds);
+            root.datas.Add(nodeInfo);
+
+            //datas[data] = nodeInfo;
+            nodes[data] = root;
+        }
+
+
+        internal void Search(QuadTreeNode<T> node, Bounds bounds, List<T> list, bool accuracy = false)
+        {
+            int dataCount = node.datas.Count;
+            if (dataCount > 0)
             {
-                for (int i = 0; i < dataCount; i++)
+                if (accuracy)
                 {
-                    list.Add(node.datas[i]);
+                    for (int i = 0; i < dataCount; i++)
+                    {
+                        if (node.datas[i].bounds.Intersect(bounds))
+                        {
+                            list.Add(node.datas[i].data);
+                        }
+                    }
+                }
+                else
+                {
+                    for (int i = 0; i < dataCount; i++)
+                    {
+                        list.Add(node.datas[i].data);
+                    }
+                }
+
+            }
+
+            if (node.nodes == null)
+            {
+                return;
+            }
+            //recurse if intersect
+            for (int i = 0; i < 4; i++)
+            {
+                QuadTreeNode<T> child = node.nodes[i];
+                if (child.bounds.Intersect(bounds))
+                {
+                    Search(child, bounds, list, accuracy);
                 }
             }
-
         }
 
-        if (node.children == null)
+        internal void Traverse(QuadTreeNode<T> node, List<T> values)
         {
-            return;
-        }
-        //recurse if intersect
-        for (int i = 0; i < 4; i++)
-        {
-            QuadTreeNode<T> child = node.children[i];
-            if (child.bounds.Intersect(bounds))
+            if (node == null)
+                return;
+
+            for (int i = 0; i < node.datas.Count; i++)
             {
-                Search(child, bounds, list, accuracy);
+                values.Add(node.datas[i].data);
+            }
+
+            if (node.nodes == null)
+                return;
+
+            for (int i = 0; i < node.nodes.Count; i++)
+            {
+                Traverse(node.nodes[i], values);
+            }
+        }
+
+        internal void CreateNodes(QuadTreeNode<T> root, Bounds bounds)
+        {
+            Vector3[] center = new Vector3[4];
+
+            Vector3 quadSize = bounds.size / 4;
+
+            center[0] = bounds.min + quadSize * 3;
+
+            center[1] = bounds.min + quadSize;
+            center[1].z = center[1].z + 2 * quadSize.z;
+
+            center[2] = bounds.min + quadSize;
+
+            center[3] = bounds.min + quadSize;
+            center[3].x = center[3].x + 2 * quadSize.x;
+
+            Vector3 size = bounds.size / 2;
+
+            root.nodes = new List<QuadTreeNode<T>>(4);
+            for (int i = 0; i < 4; i++)
+            {
+                QuadTreeNode<T> node = new QuadTreeNode<T>(id++, root.id, root.depth + 1, new Bounds(center[i], size));
+                root.nodes.Add(node);
+            }
+            root.hasNode = true;
+        }
+
+
+        internal void Remove(T data)
+        {
+            if (nodes.TryGetValue(data, out QuadTreeNode<T> node))
+            {
+                for (int i = 0; i < node.datas.Count; i++)
+                {
+                    if (node.datas[i].data.Equals(data))
+                    {
+                        node.datas.RemoveAt(i);
+                        break;
+                    }
+                }
+                //datas.Remove(data);
             }
         }
     }
 
-    internal void Traverse(QuadTreeNode<T> node, List<T> values)
-    {
-        if (node == null)
-            return;
-
-        for (int i = 0; i < node.datas.Count; i++)
-        {
-            values.Add(node.datas[i]);
-        }
-
-        if (node.children == null)
-            return;
-
-        for (int i = 0; i < node.children.Length; i++)
-        {
-            Traverse(node.children[i], values);
-        }
-    }
 }
